@@ -1,6 +1,6 @@
 """ neighborhood_sir.py
 
-The posterior class for the regularized SIR model adjusted for 
+The posterior class for the regularized SIR model adjusted for
 the incorporation of a spatial neighborhood to influence seasonality."""
 import os
 
@@ -16,9 +16,9 @@ from scipy.optimize import minimize
 
 class NeighborhoodPosterior(object):
 
-    """ Limited version of the full model to estimate SIA impact only, which we need to
+    """Limited version of the full model to estimate SIA impact only, which we need to
     create regularizing inputs for the state level. See the discussion around Appendix 2,
-    equations 3 and 4. 
+    equations 3 and 4.
 
     This object encapsulates methods to evaluate the hierarchical posterior distribution in
     different ways and its gradient to facilitate model fitting.
@@ -52,7 +52,7 @@ class NeighborhoodPosterior(object):
         self.sias = sia_effects.values
         self.num_sias = self.sias.shape[1]
 
-        ## Information needed to regularize 
+        ## Information needed to regularize
         ## S0 from the annualize-time prior, which we choose to
         ## implement in log-space for numerical stability
         ## reasons.
@@ -65,7 +65,7 @@ class NeighborhoodPosterior(object):
         ## of sia doses that seroconvert a susceptible.
         self.mu = mu_guess*np.ones((self.num_sias,))
         self.mu_var = np.zeros((self.num_sias,))
-        
+
         ## Initialize key pieces, like the periodic smoothing
         ## matrix associated with the seasonality prior..
         self.tau = tau
@@ -74,7 +74,7 @@ class NeighborhoodPosterior(object):
         D2[-1,0] = 1
         self.pRW2 = np.dot(D2.T,D2)*((beta_corr**4)/4.)
 
-        ## The design matrices for the linear portion of the 
+        ## The design matrices for the linear portion of the
         ## transmission regression problem.
         self.X = np.vstack((int(len(df)-1/len(self.pRW2))+1)*[np.eye(len(self.pRW2))])[:len(df)-1]
         self.C = np.linalg.inv(np.dot(self.X.T,self.X)+self.pRW2)
@@ -86,8 +86,8 @@ class NeighborhoodPosterior(object):
 
     def compartment_df(self):
 
-        ''' Return a DataFrame with columns E_t, I_t and S_t (exposed, infectious and susceptible
-        counts) at the current parameter values (self.logS0 and self.mu). '''
+        """ Return a DataFrame with columns E_t, I_t and S_t (exposed, infectious and susceptible
+        counts) at the current parameter values (self.logS0 and self.mu). """
 
         ## Compute key quantities related to the populations
         ## in the different model compartments. In this formulation
@@ -97,7 +97,7 @@ class NeighborhoodPosterior(object):
         E_t = self.adj_cases[1:]
         I_t = self.adj_cases[:-1]
         S_t = np.exp(self.logS0) + np.cumsum(self.B_t[:-1]-E_t-adj_sias)
-        
+
         ## Pack them up into a single dataframe.
         time = np.arange(0,len(I_t)+1)
         E_t = pd.Series(E_t,index=time[1:],name="E_t")
@@ -105,17 +105,17 @@ class NeighborhoodPosterior(object):
         S_t = pd.Series(S_t,index=time[:-1],name="S_t")
         out = pd.concat([E_t,I_t,S_t],axis=1).sort_index()
         return out
-        
+
     def fixed_rt(self,theta):
 
-        ''' Evaluate the negative log posterior on iterations where adj_cases is fixed.
+        """ Evaluate the negative log posterior on iterations where adj_cases is fixed.
 
         Args:
             theta (numpy.ndarray): Parameters, [log(S0), mu[0], ..., mu[num_sias-1]].
 
         Returns:
             float: The negative log posterior (up to a constant), to be minimized.
-        '''
+        """
 
         ## Unpack the input array.
         S0 = np.exp(theta[0])
@@ -137,12 +137,12 @@ class NeighborhoodPosterior(object):
 
         ## Add the prior for S0.
         lnp_S0 = 0.5*((theta[0]-self.logS0_prior)**2)/(self.logS0_prior_var)
-        
+
         return lnp_beta + lnp_S0
 
     def fixed_rt_grad(self,theta):
 
-        ''' Gradient of fixed_rt(theta) with respect to theta. '''
+        """ Gradient of fixed_rt(theta) with respect to theta. """
 
         ## Unpack the input array.
         S0 = np.exp(theta[0])
@@ -155,7 +155,7 @@ class NeighborhoodPosterior(object):
         I_t = self.adj_cases[:-1]
         S_t = S0 + np.cumsum(self.B_t[:-1]-E_t-adj_sias)
         Y_t = np.log(E_t)-np.log(I_t)-np.log(S_t)
-        
+
         ## Solve the linear regression problem associated with
         ## the transmission rate.
         Y_hat = np.dot(self.H,Y_t)
@@ -163,7 +163,7 @@ class NeighborhoodPosterior(object):
         var = np.sum(resid**2)/self.T
 
         ## Compute the contribution from the S_t prior.
-        dYdt0 = -S0/S_t 
+        dYdt0 = -S0/S_t
         grad_t = np.dot(dYdt0-np.dot(self.H,dYdt0),resid)/var
         grad_t += (theta[0]-self.logS0_prior)/self.logS0_prior_var
 
@@ -179,7 +179,7 @@ class NeighborhoodPosterior(object):
 
     def fixed_rt_hessian(self,theta):
 
-        ''' Hessian of fixed_rt(theta) with respect to theta. '''
+        """ Hessian of fixed_rt(theta) with respect to theta. """
 
         ## Unpack the S0-mu point of interest
         S0 = np.exp(theta[0])
@@ -199,7 +199,7 @@ class NeighborhoodPosterior(object):
         var = np.sum(resid**2)/self.T
 
         ## Compute the S0-S0 term.
-        dYdx0 = -S0/S_t 
+        dYdx0 = -S0/S_t
         dYdx0dx0 = dYdx0**2 + dYdx0
         dS0dS0 = np.dot(dYdx0dx0-np.dot(self.H,dYdx0dx0),resid)/var+\
                  np.dot(dYdx0-np.dot(self.H,dYdx0),dYdx0-np.dot(self.H,dYdx0))/var+\
@@ -214,13 +214,13 @@ class NeighborhoodPosterior(object):
         for i in range(self.num_sias):
             dYdmudi = dYdmu[:,i,np.newaxis]*dYdmu
             dmudmu[i,:] += np.dot((dYdmudi-np.dot(self.H,dYdmudi)).T,resid)/var
-        
+
         ## Compute the cross terms
         dYdx0dmu = dYdx0[:,np.newaxis]*dYdmu
         dS0dmu = np.dot((dYdx0dmu-np.dot(self.H,dYdx0dmu)).T,resid)/var+\
                  np.dot(dresid.T,dYdx0-np.dot(self.H,dYdx0))/var+\
                  -(2./self.T)*(np.dot(dresid.T,resid)/var)*(np.dot(dYdx0-np.dot(self.H,dYdx0),resid)/var)
-        
+
         ## Put it all together
         hess = np.zeros((self.num_sias+1,self.num_sias+1))
         hess[0,0] = dS0dS0
@@ -232,9 +232,9 @@ class NeighborhoodPosterior(object):
 
 class HoodRegularizedModel(object):
 
-    """ This is the main model class, to be applied at the level-of-interest (state level in the 
-    paper), which takes the regularizing model output above as input. See the discussion around 
-    appendix 2, equations 1 and 2 and equation 6. 
+    """This is the main model class, to be applied at the level of  interest (state level in the
+    paper), which takes the regularizing model output above as input. See the discussion around
+    appendix 2, equations 1 and 2 and equation 6.
 
     This object encapsulates methods to evaluate the hierarchical posterior distribution in
     different ways and its gradient to facilitate model fitting.
@@ -270,7 +270,7 @@ class HoodRegularizedModel(object):
         self.sias = sia_effects.values
         self.num_sias = self.sias.shape[1]
 
-        ## Information needed to regularize 
+        ## Information needed to regularize
         ## S0 from the annualize-time prior, which we choose to
         ## implement in log-space for numerical stability
         ## reasons.
@@ -288,7 +288,7 @@ class HoodRegularizedModel(object):
         self.r_prior_precision = np.diag(1./(df["rr_p_var"].values))
         self.r_floor = (df["rr_p"]-4.*np.sqrt(df["rr_p_var"])).min()
         self.r_hat = df["rr_p"].values
-        
+
         ## Initialize key regression pieces, like the periodic smoothing
         ## matrix to be applied to the seasonality profile.
         self.tau = tau
@@ -319,14 +319,14 @@ class HoodRegularizedModel(object):
                             self.X])
         self.X[:self.T,0] = 1.
 
-        ## The design matrices for the linear portion of the 
+        ## The design matrices for the linear portion of the
         ## transmission regression problem.
         self.C = np.linalg.inv(np.dot(self.X.T,self.X)+self.lam)
         self.H = np.dot(self.X,np.dot(self.C,self.X.T))
 
     def fixed_mu(self,theta):
 
-        ''' Evaluate the negative log posterior on iterations where SIA impact, mu, is fixed.
+        """ Evaluate the negative log posterior on iterations where SIA impact, mu, is fixed.
 
         Args:
             theta (numpy.ndarray): Parameters, [log(S0), r_t[0], ..., r_t[T]], where r_t is the
@@ -334,12 +334,12 @@ class HoodRegularizedModel(object):
 
         Returns:
             float: The negative log posterior (up to a constant), to be minimized.
-        '''
+        """
 
         ## Unpack the input
         S0 = np.exp(theta[0])
         r_t = theta[1:]
-    
+
         ## Compute the implied model compartments populations.
         adj_cases = (self.C_t+1.)/r_t - 1.
         adj_sias = (self.mu*self.sias[:-1]).sum(axis=1)
@@ -358,7 +358,7 @@ class HoodRegularizedModel(object):
 
         ## Compute the S0 prior term
         lnp_S0 = 0.5*((theta[0]-self.logS0_prior)**2)/self.logS0_prior_var
-        
+
         ## Compute the r_t prior term.
         lnp_rt = 0.5*np.sum(((r_t-self.r_prior)**2)*np.diag(self.r_prior_precision))
 
@@ -366,7 +366,7 @@ class HoodRegularizedModel(object):
 
     def fixed_mu_grad(self,theta):
 
-        ''' Gradient of fixed_mu(theta) with respect to theta. '''
+        """ Gradient of fixed_mu(theta) with respect to theta. """
 
         ## Unpack the input
         S0 = np.exp(theta[0])
@@ -390,12 +390,12 @@ class HoodRegularizedModel(object):
         var = np.sum(resid**2)/(2.*self.T)
 
         ## Compute the contribution from S_t
-        dYdt0 = -S0/S_t 
+        dYdt0 = -S0/S_t
         dYdt0 = np.hstack([dYdt0,np.zeros(dYdt0.shape)])
         grad_t = np.dot(dYdt0-np.dot(self.H,dYdt0),resid)/var
         grad_t += (theta[0]-self.logS0_prior)/self.logS0_prior_var
 
-        ## Compute the contribution for r_t 
+        ## Compute the contribution for r_t
         dYtdrt = (I_t+1.)/(I_t*r_t[:-1])
         dYtdrt_plus1 = -(E_t+1.)/(E_t*r_t[1:])
         dYdr = diags([dYtdrt,dYtdrt_plus1],[0,1],shape=(self.T,self.T+1)).todense()
@@ -403,7 +403,7 @@ class HoodRegularizedModel(object):
         dYdr = np.vstack([dYdr,np.zeros(dYdr.shape)])
         grad_r = np.dot((dYdr-np.dot(self.H,dYdr)).T,resid)/var
         grad_r += np.dot(self.r_prior_precision,r_t-self.r_prior)
-        
+
         ## Combine and return
         jac = np.zeros((len(theta),))
         jac[0] = grad_t
@@ -412,7 +412,7 @@ class HoodRegularizedModel(object):
 
     def fixed_rt(self,theta):
 
-        ''' Evaluate the negative log posterior on iterations where adj_cases (i.e. the reporting
+        """Evaluate the negative log posterior on iterations where adj_cases (i.e. the reporting
         rate, r_hat) is fixed.
 
         Args:
@@ -420,7 +420,7 @@ class HoodRegularizedModel(object):
 
         Returns:
             float: The negative log posterior (up to a constant), to be minimized.
-        '''
+        """
 
         ## Unpack
         S0 = np.exp(theta[0])
@@ -437,7 +437,7 @@ class HoodRegularizedModel(object):
 
         ## Augment Y_t with the neighboorhood information
         Y_tot = np.hstack([Y_t,self.Y_N])
-        
+
         ## Solve the linear regression problem
         Y_hat = np.dot(self.H,Y_tot)
         RSS = np.sum((Y_tot-Y_hat)**2)
@@ -445,12 +445,12 @@ class HoodRegularizedModel(object):
 
         ## Add the prior contribution from S0.
         lnp_S0 = 0.5*((theta[0]-self.logS0_prior)**2)/(self.logS0_prior_var)
-        
+
         return lnp_beta + lnp_S0
 
     def fixed_rt_grad(self,theta):
 
-        ''' Gradient of fixed_rt(theta) with respect to theta. '''
+        """Gradient of fixed_rt(theta) with respect to theta. """
 
         ## Unpack
         S0 = np.exp(theta[0])
@@ -466,7 +466,7 @@ class HoodRegularizedModel(object):
 
         ## Augment Y_t with the neighboorhood information
         Y_tot = np.hstack([Y_t,self.Y_N])
-        
+
         ## Solve the linear regression problem and compute
         ## The implied variance
         Y_hat = np.dot(self.H,Y_tot)
@@ -492,8 +492,8 @@ class HoodRegularizedModel(object):
 
     def fixed_rt_hessian(self,theta):
 
-        ''' Hessian of fixed_rt(theta) with respect to theta, used to approximate the
-        covariance of S0 and mu at the optimum. '''
+        """Hessian of fixed_rt(theta) with respect to theta, used to approximate the
+        covariance of S0 and mu at the optimum. """
 
         ## Unpack the S0-mu point of interest
         S0 = np.exp(theta[0])
@@ -517,7 +517,7 @@ class HoodRegularizedModel(object):
         var = np.sum(resid**2)/(2.*self.T)
 
         ## Compute the S0-S0 term.
-        dYdx0 = -S0/S_t 
+        dYdx0 = -S0/S_t
         dYdx0dx0 = dYdx0**2 + dYdx0
         dYdx0 = np.hstack([dYdx0,np.zeros(dYdx0.shape)])
         dYdx0dx0 = np.hstack([dYdx0dx0,np.zeros(dYdx0dx0.shape)])
@@ -535,13 +535,13 @@ class HoodRegularizedModel(object):
         for i in range(self.num_sias):
             dYdmudi = dYdmu[:,i,np.newaxis]*dYdmu
             dmudmu[i,:] += np.dot((dYdmudi-np.dot(self.H,dYdmudi)).T,resid)/var
-        
+
         ## Compute the cross terms
         dYdx0dmu = dYdx0[:,np.newaxis]*dYdmu
         dS0dmu = np.dot((dYdx0dmu-np.dot(self.H,dYdx0dmu)).T,resid)/var+\
                  np.dot(dresid.T,dYdx0-np.dot(self.H,dYdx0))/var+\
                  -(2./(2.*self.T))*(np.dot(dresid.T,resid)/var)*(np.dot(dYdx0-np.dot(self.H,dYdx0),resid)/var)
-        
+
         ## Put it all together
         hess = np.zeros((self.num_sias+1,self.num_sias+1))
         hess[0,0] = dS0dS0
@@ -553,7 +553,7 @@ class HoodRegularizedModel(object):
 
     def __call__(self,theta):
 
-        ''' Evaluate the full, hierarchical negative log posterior across all parameters. This is mainly
+        """Evaluate the full, hierarchical negative log posterior across all parameters. This is mainly
         to facilitate visualization, posterior profiling, etc. as opposed to model fitting (which is more
         stable in stages as above).
 
@@ -562,9 +562,9 @@ class HoodRegularizedModel(object):
 
         Returns:
             float: The negative log posterior (up to a constant).
-        '''
+        """
 
-        ## Unpack 
+        ## Unpack
         S0 = np.exp(theta[0])
         mu = theta[1:self.num_sias+1]
         r_t = theta[1+self.num_sias:]
@@ -579,7 +579,7 @@ class HoodRegularizedModel(object):
 
         ## Augment Y_t with the neighboorhood information
         Y_tot = np.hstack([Y_t,self.Y_N])
-        
+
         ## Solve the linear regression problem
         Y_hat = np.dot(self.H,Y_tot)
         RSS = np.sum((Y_tot-Y_hat)**2)
@@ -587,7 +587,7 @@ class HoodRegularizedModel(object):
 
         ## If you added S0 var
         lnp_S0 = 0.5*((theta[0]-self.logS0_prior)**2)/(self.logS0_prior_var)
-        
+
         ## Compute the r_t component
         lnp_rt = 0.5*np.sum(((r_t-self.r_prior)**2)*np.diag(self.r_prior_precision))
 
@@ -598,7 +598,7 @@ class HoodRegularizedModel(object):
 ######################################################################################################
 def get_age_pyramid(state,fname=os.path.join("_data","grid3_population_by_state.csv")):
 
-    ''' Read a state's population by age from the GRID3 file and return it as a yearly age distribution.
+    """Read a state's population by age from the GRID3 file and return it as a yearly age distribution.
 
     Args:
         state (str): Lowercase state name, as in the "state" column of fname.
@@ -607,15 +607,15 @@ def get_age_pyramid(state,fname=os.path.join("_data","grid3_population_by_state.
     Returns:
         tuple: (pyramid, population), where pyramid is a pandas.Series of the fraction of the
         population at each single year of age and population is the state's total population (int).
-    '''
+    """
 
     ## Get the output from grid3
     df = pd.read_csv(fname,index_col=0)\
             .set_index(["state","age_bin"])
     df = df.loc[state].reset_index()
     population = int(np.round(df["total"].sum()))
-    
-    ## Make an age column, representing the start 
+
+    ## Make an age column, representing the start
     ## of the age bins
     df["age"] = df["age_bin"].apply(lambda s: int(s.split()[0]))
     df = df.sort_values("age")
@@ -633,7 +633,7 @@ def get_age_pyramid(state,fname=os.path.join("_data","grid3_population_by_state.
 
 def prep_model_inputs(state,time_index,epi,cr,dists,mcv1_effic=0.825,mcv2_effic=0.95):
 
-    '''This function prepares the dataframe that has all the key inputs (cases, births, etc.) on the
+    """Prepare the dataframe that has all the key inputs (cases, births, etc.) on the
     same time scale and in terms of the necessary inputs to the model (RI adjusted births, for example).
 
     Args:
@@ -651,7 +651,7 @@ def prep_model_inputs(state,time_index,epi,cr,dists,mcv1_effic=0.825,mcv2_effic=
     Returns:
         pandas.DataFrame: Model inputs from 2009 onward, including adj_births (births not immunized by
         routine immunization), adj_cases_p, and the reporting rate prior (rr_p, rr_p_var).
-    '''
+    """
 
     ## Start by aggregating the epi data to the semi-monthly timescale.
     ## SMS: SemiMonthly-Start, i.e. first and 15th of every month.
@@ -665,13 +665,13 @@ def prep_model_inputs(state,time_index,epi,cr,dists,mcv1_effic=0.825,mcv2_effic=
                                   "mcv2_var":"mean"})
     df["births"] = df["births"].rolling(2).mean()
     df["births_var"] = df["births_var"].rolling(2).mean()
-    df = df.loc[time_index] 
+    df = df.loc[time_index]
 
     ## Add a population column, which is constant over time.
     _, population = get_age_pyramid(state)
     df["population"] = len(df)*[population]
 
-    ## Unpack the coarse regression outputs 
+    ## Unpack the coarse regression outputs
     ## and interpolate to the fine time scale.
     initial_S0 = cr.loc[2009,"S0"]
     initial_S0_var = cr.loc[2009,"S0_var"]
@@ -683,8 +683,8 @@ def prep_model_inputs(state,time_index,epi,cr,dists,mcv1_effic=0.825,mcv2_effic=
     rr_prior = rr_prior.set_index("time")
     rr_prior = rr_prior.resample("d").interpolate().reindex(df.index)
     rr_prior = rr_prior.fillna(method="bfill").fillna(method="ffill")
-    
-    ## Add the reporting rate prior information to the 
+
+    ## Add the reporting rate prior information to the
     ## overall dataframe.
     df = pd.concat([df,rr_prior],axis=1)
 
@@ -739,7 +739,7 @@ def prep_model_inputs(state,time_index,epi,cr,dists,mcv1_effic=0.825,mcv2_effic=
 
 def prep_sia_effects(cal,time_index,md=False):
 
-    ''' Align an SIA calendar to the model's time steps.
+    """ Align an SIA calendar to the model's time steps.
 
     Args:
         cal (pandas.DataFrame): SIA calendar with start_date, end_date and doses columns, like
@@ -750,10 +750,10 @@ def prep_sia_effects(cal,time_index,md=False):
     Returns:
         pandas.DataFrame: Doses by time step (rows) and SIA (columns), placed at each campaign's midpoint.
         If md is True, a tuple of this and the metadata DataFrame.
-    '''
+    """
 
     ## Get the SIA calendar to collect SIA effects, looping over campaigns
-    ## and aligning to the time steps 
+    ## and aligning to the time steps
     cal = cal.loc[(cal["start_date"] >= time_index[0]) &\
                   (cal["start_date"] <= time_index[-1])]
     cal = cal.sort_values("start_date").reset_index(drop=True)
@@ -762,12 +762,12 @@ def prep_sia_effects(cal,time_index,md=False):
 
     ## Capture the metadata
     sia_metadata = cal.reset_index().rename(columns={"index":"sia_num"})
-    
+
     ## And make a time series version
     sia_effects = cal[["time","doses"]].copy()
     sia_effects["time"] = sia_effects["time"].apply(lambda t: np.argmin(np.abs(t-time_index)))
     sia_effects["time"] = time_index[sia_effects["time"].values]
-    
+
     ## Consolidate any overlapping dates, and reshape into one
     ## timeseries per SIA, with the doses at the approporate dates
     sia_effects = sia_effects.groupby("time").sum().reset_index()
@@ -784,7 +784,7 @@ def prep_sia_effects(cal,time_index,md=False):
 
 def fit_the_neighborhood_model(region,hood_df,hood_sias,initial_mu_guess=0.1):
 
-    '''This function fits the model at the neighborhood level, leveraging the class above and
+    """This function fits the model at the neighborhood level, leveraging the class above and
     encapsulated methods therein.
 
     Args:
@@ -797,7 +797,7 @@ def fit_the_neighborhood_model(region,hood_df,hood_sias,initial_mu_guess=0.1):
     Returns:
         NeighborhoodPosterior: The model with logS0 and mu set to their fitted values. Prints
         whether the optimizer converged.
-    '''
+    """
 
     ## Create a model object.
     hoodP = NeighborhoodPosterior(
@@ -834,7 +834,7 @@ def fit_the_neighborhood_model(region,hood_df,hood_sias,initial_mu_guess=0.1):
 
 def fit_the_regularized_model(state,state_df,state_sias,hood_t,initial_mu_guess=0.5):
 
-    '''This function fits the model at the state level, leveraging the class above, i.e. the
+    """This function fits the model at the state level, leveraging the class above, i.e. the
     encapsulated methods therein, as well as the fitted neighborhood model output (hood_t).
 
     Args:
@@ -850,7 +850,7 @@ def fit_the_regularized_model(state,state_df,state_sias,hood_t,initial_mu_guess=
         HoodRegularizedModel (with logS0, mu, r_hat and their variances set), inf_seasonality and
         inf_seasonality_std are the seasonal transmission profile and its standard error, alpha is the
         exponent on infectious individuals, and sig_eps is the residual standard deviation.
-    '''
+    """
 
     ## Then use that estimate of the compartments to
     ## inform seasonality in the state level model.
@@ -908,11 +908,11 @@ def fit_the_regularized_model(state,state_df,state_sias,hood_t,initial_mu_guess=
     x0[1:] = neglp.mu
     hessian = neglp.fixed_rt_hessian(x0)
     cov = np.linalg.inv(hessian)
-    
+
     ## Finalize the uncertainty estimates
     overall_var = np.diag(cov)
     neglp.logS0_var = overall_var[0]
-    neglp.mu_var = overall_var[1:]  
+    neglp.mu_var = overall_var[1:]
 
     ## Finally, fully specify the transmission parameters using the
     ## SIA and reporting rate estimates via the optimization above. In this case
@@ -925,7 +925,7 @@ def fit_the_regularized_model(state,state_df,state_sias,hood_t,initial_mu_guess=
     I_t = adj_cases[:-1]
     S_t = np.exp(neglp.logS0)+np.cumsum(state_df["adj_births"].values[:-1]-E_t-adj_sias)
 
-    ## Which let's us estimate via a single log-linear regression 
+    ## Which let's us estimate via a single log-linear regression
     ## the alpha != 1 model parameters...
     print("\nSpecifying the final transmission term...")
     Y_t = np.log(E_t)-np.log(S_t)
@@ -952,11 +952,11 @@ def fit_the_regularized_model(state,state_df,state_sias,hood_t,initial_mu_guess=
 
 def fit_the_regularized_model_smooth_rt(state,state_df,state_sias,hood_t,initial_mu_guess=0.5):
 
-    '''This is just like the function above, but the final specification of the transmission term
+    """This is just like the function above, but the final specification of the transmission term
     forces a smooth r_t over time to illustrate the effect of conventional time-correlation in reporting
     rate estimation. This is NOT used at all in the manuscript, but is a valuable illustration of how different
     correlation structures can affect outputs and model performance on forecast tests. The function is written to
-    directly replace fit_the_regularized_model(...) in any script. '''
+    directly replace fit_the_regularized_model(...) in any script. """
 
     ## Then use that estimate of the compartments to
     ## inform seasonality in the state level model.
@@ -1018,11 +1018,11 @@ def fit_the_regularized_model_smooth_rt(state,state_df,state_sias,hood_t,initial
     x0[1:] = neglp.mu
     hessian = neglp.fixed_rt_hessian(x0)
     cov = np.linalg.inv(hessian)
-    
+
     ## Finalize the uncertainty estimates
     overall_var = np.diag(cov)
     neglp.logS0_var = overall_var[0]
-    neglp.mu_var = overall_var[1:]  
+    neglp.mu_var = overall_var[1:]
 
     ## Finally, fully specify the transmission parameters using the
     ## SIA and reporting rate estimates via the optimization above
@@ -1033,7 +1033,7 @@ def fit_the_regularized_model_smooth_rt(state,state_df,state_sias,hood_t,initial
     I_t = adj_cases[:-1]
     S_t = np.exp(neglp.logS0)+np.cumsum(state_df["adj_births"].values[:-1]-E_t-adj_sias)
 
-    ## Which let's us estimate via a single log-linear regression 
+    ## Which let's us estimate via a single log-linear regression
     ## the alpha != 1 model parameters...
     print("\nSpecifying the final transmission term...")
     Y_t = np.log(E_t)-np.log(S_t)
